@@ -39,6 +39,7 @@ module "compute" {
 }
 
 resource "aws_s3_bucket" "audit_logs" {
+  #checkov:skip=CKV_AWS_199: Cross-region replication not required for this environment
   bucket        = var.audit_bucket_name
   force_destroy = false
   tags          = merge(var.tags, { Purpose = "audit-logs" })
@@ -58,7 +59,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "audit_logs" {
   bucket = aws_s3_bucket.audit_logs.id
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = "alias/aws/s3"
     }
   }
 }

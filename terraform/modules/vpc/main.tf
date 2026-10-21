@@ -38,6 +38,7 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 resource "aws_eip" "nat" {
+  #checkov:skip=CKV2_AWS_19: EIP used for NAT gateway
   count  = var.enable_nat_gateway ? 1 : 0
   domain = "vpc"
   tags   = merge(var.tags, { Name = "${var.project_name}-nat-eip" })
