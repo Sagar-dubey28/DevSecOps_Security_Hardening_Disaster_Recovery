@@ -1,0 +1,7 @@
+---
+- name: Apply baseline security hardening
+  hosts: app
+  become: true
+  gather_facts: true
+  roles:
+    - hardening

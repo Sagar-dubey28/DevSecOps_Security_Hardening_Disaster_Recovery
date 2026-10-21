@@ -1,0 +1,26 @@
+# Terraform state, plans and local settings
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+terraform/tfplan
+terraform/tfplan.txt
+terraform/terraform.tfvars
+crash.log
+.terraform.lock.hcl.backup
+
+# Ansible
+*.retry
+.vault_pass
+
+# Secrets and local artifacts
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.secret
+.cache/
+.sonar/

@@ -1,0 +1,147 @@
+---
+- name: Ensure supported Debian-family host
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family == "Debian"
+    fail_msg: "This role supports Debian/Ubuntu-family hosts; adapt before using elsewhere."
+
+- name: Refresh apt cache and apply security upgrades
+  ansible.builtin.apt:
+    update_cache: true
+    upgrade: dist
+    cache_valid_time: 3600
+
+- name: Install baseline security packages
+  ansible.builtin.apt:
+    name:
+      - unattended-upgrades
+      - auditd
+      - audispd-plugins
+      - ufw
+      - aide
+      - fail2ban
+    state: present
+
+- name: Configure unattended security upgrades
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+  notify: Restart unattended-upgrades
+
+- name: Configure SSH daemon hardening
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/99-secops-hardening.conf
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      PermitRootLogin no
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PubkeyAuthentication yes
+      X11Forwarding no
+      AllowTcpForwarding no
+      MaxAuthTries 4
+      LoginGraceTime 30
+      ClientAliveInterval 300
+      ClientAliveCountMax 2
+  notify: Validate and restart SSH
+
+- name: Configure sysctl network hardening
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-secops-hardening.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      net.ipv4.conf.all.accept_redirects = 0
+      net.ipv4.conf.default.accept_redirects = 0
+      net.ipv4.conf.all.send_redirects = 0
+      net.ipv4.conf.default.send_redirects = 0
+      net.ipv4.conf.all.accept_source_route = 0
+      net.ipv4.conf.default.accept_source_route = 0
+      net.ipv4.icmp_echo_ignore_broadcasts = 1
+      net.ipv4.conf.all.rp_filter = 1
+      net.ipv4.conf.default.rp_filter = 1
+      kernel.randomize_va_space = 2
+  notify: Reload sysctl
+
+- name: Configure auditd rules for identity and privilege changes
+  ansible.builtin.copy:
+    dest: /etc/audit/rules.d/50-secops.rules
+    owner: root
+    group: root
+    mode: "0640"
+    content: |
+      -w /etc/passwd -p wa -k identity
+      -w /etc/group -p wa -k identity
+      -w /etc/shadow -p wa -k identity
+      -w /etc/sudoers -p wa -k scope
+      -w /etc/sudoers.d/ -p wa -k scope
+      -w /etc/ssh/sshd_config -p wa -k sshd
+      -w /etc/ssh/sshd_config.d/ -p wa -k sshd
+      -a always,exit -F arch=b64 -S execve -F euid=0 -k privileged
+  notify: Restart auditd
+
+- name: Enable auditd
+  ansible.builtin.service:
+    name: auditd
+    enabled: true
+    state: started
+
+- name: Allow SSH through UFW only when explicitly enabled
+  community.general.ufw:
+    rule: allow
+    name: OpenSSH
+  when: hardening_allow_ssh | default(false) | bool
+
+- name: Allow application port from trusted network when configured
+  community.general.ufw:
+    rule: allow
+    port: "{{ hardening_app_port | default('8080') }}"
+    proto: tcp
+    src: "{{ hardening_app_source_cidr | default('10.40.0.0/16') }}"
+  when: hardening_allow_app | default(true) | bool
+
+- name: Set UFW default inbound deny
+  community.general.ufw:
+    direction: incoming
+    policy: deny
+
+- name: Set UFW default outbound allow
+  community.general.ufw:
+    direction: outgoing
+    policy: allow
+
+- name: Enable UFW logging
+  community.general.ufw:
+    logging: "medium"
+
+- name: Enable UFW firewall
+  community.general.ufw:
+    state: enabled
+
+- name: Ensure fail2ban is enabled
+  ansible.builtin.service:
+    name: fail2ban
+    enabled: true
+    state: started
+
+- name: Ensure unattended-upgrades is enabled
+  ansible.builtin.service:
+    name: unattended-upgrades
+    enabled: true
+    state: started
+
+- name: Set permissions on SSH host private keys
+  ansible.builtin.shell: |
+    set -eu
+    find /etc/ssh -maxdepth 1 -type f -name 'ssh_host_*_key' -exec chmod 0600 {} +
+  args:
+    executable: /bin/sh
+  changed_when: false

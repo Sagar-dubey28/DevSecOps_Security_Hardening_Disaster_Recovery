@@ -1,0 +1,168 @@
+stages: [validate, security, test, deploy, recovery]
+
+variables:
+  TF_ROOT: "$CI_PROJECT_DIR/terraform"
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TF_VERSION: "1.9.8"
+  CHECKOV_VERSION: "3.2.357"
+  TRIVY_VERSION: "0.57.1"
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  GIT_DEPTH: "0"
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
+
+.tf_image: &tf_image
+  image: hashicorp/terraform:1.9.8
+  before_script:
+    - terraform version
+    - cd "$TF_ROOT"
+
+terraform:fmt:
+  <<: *tf_image
+  stage: validate
+  script:
+    - terraform fmt -check -recursive
+
+terraform:validate:
+  <<: *tf_image
+  stage: validate
+  script:
+    - terraform init -backend=false
+    - terraform validate
+
+ansible:syntax:
+  stage: validate
+  image: python:3.12-alpine
+  before_script:
+    - pip install --no-cache-dir ansible-core==2.17.7 ansible-lint==24.10.0
+  script:
+    - ansible-playbook --syntax-check -i ansible/inventory/hosts.ini ansible/playbooks/secops_hardening.yml
+    - ansible-lint ansible/playbooks/secops_hardening.yml
+
+shell:lint:
+  stage: validate
+  image: koalaman/shellcheck:v0.10.0
+  script:
+    - shellcheck scripts/backup.sh scripts/restore.sh
+
+checkov:
+  stage: security
+  image: bridgecrew/checkov:3.2.357
+  script:
+    - checkov -d terraform --framework terraform --soft-fail-on LOW,MEDIUM
+  allow_failure: false
+
+trivy:filesystem:
+  stage: security
+  image: aquasec/trivy:0.57.1
+  script:
+    - trivy fs --scanners vuln,misconfig,secret --severity HIGH,CRITICAL --exit-code 1 .
+
+sonarqube:
+  stage: security
+  image: sonarsource/sonar-scanner-cli:11
+  variables:
+    SONAR_USER_HOME: "$CI_PROJECT_DIR/.sonar"
+  cache:
+    key: sonar-cache
+    paths: [.sonar/cache]
+  script:
+    - sonar-scanner -Dsonar.projectKey="$SONAR_PROJECT_KEY" -Dsonar.sources=terraform,ansible,scripts -Dsonar.host.url="$SONAR_HOST_URL" -Dsonar.qualitygate.wait=true
+  rules:
+    - if: '$SONAR_HOST_URL && $SONAR_TOKEN && $SONAR_PROJECT_KEY'
+    - when: never
+
+# GitLab OIDC: configure AWS_ROLE_ARN, AWS_DEFAULT_REGION and AWS_ROLE_SESSION_NAME
+# as non-secret CI variables. No AWS access key is stored in GitLab.
+.aws_oidc:
+  image: amazon/aws-cli:2.22.16
+  id_tokens:
+    GITLAB_OIDC_TOKEN:
+      aud: sts.amazonaws.com
+  before_script:
+    - mkdir -p ~/.aws
+    - printf '[profile gitlab]\nrole_arn=%s\nweb_identity_token_file=/tmp/gitlab-oidc-token\nrole_session_name=%s\n' "$AWS_ROLE_ARN" "${AWS_ROLE_SESSION_NAME:-gitlab-${CI_PIPELINE_ID}}" > ~/.aws/config
+    - printf '%s' "$GITLAB_OIDC_TOKEN" > /tmp/gitlab-oidc-token
+    - export AWS_PROFILE=gitlab AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:?Set AWS_DEFAULT_REGION}"
+    - aws sts get-caller-identity
+
+terraform:plan:
+  stage: deploy
+  image: hashicorp/terraform:1.9.8
+  id_tokens:
+    GITLAB_OIDC_TOKEN:
+      aud: sts.amazonaws.com
+  before_script:
+    - apk add --no-cache aws-cli
+    - mkdir -p ~/.aws
+    - printf '%s' "$GITLAB_OIDC_TOKEN" > /tmp/gitlab-oidc-token
+    - printf '[profile gitlab]\nrole_arn=%s\nweb_identity_token_file=/tmp/gitlab-oidc-token\nrole_session_name=gitlab-%s\n' "$AWS_ROLE_ARN" "$CI_PIPELINE_ID" > ~/.aws/config
+    - export AWS_PROFILE=gitlab AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:?Set AWS_DEFAULT_REGION}"
+    - cd "$TF_ROOT"
+    - terraform init
+  script:
+    - terraform plan -out=tfplan
+    - terraform show -no-color tfplan > tfplan.txt
+  artifacts:
+    paths: [terraform/tfplan, terraform/tfplan.txt]
+    expire_in: 1 day
+  rules:
+    - if: '$CI_COMMIT_BRANCH'
+
+terraform:apply:
+  stage: deploy
+  image: hashicorp/terraform:1.9.8
+  id_tokens:
+    GITLAB_OIDC_TOKEN:
+      aud: sts.amazonaws.com
+  before_script:
+    - apk add --no-cache aws-cli
+    - mkdir -p ~/.aws
+    - printf '%s' "$GITLAB_OIDC_TOKEN" > /tmp/gitlab-oidc-token
+    - printf '[profile gitlab]\nrole_arn=%s\nweb_identity_token_file=/tmp/gitlab-oidc-token\nrole_session_name=gitlab-%s\n' "$AWS_ROLE_ARN" "$CI_PIPELINE_ID" > ~/.aws/config
+    - export AWS_PROFILE=gitlab AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:?Set AWS_DEFAULT_REGION}"
+    - cd "$TF_ROOT"
+    - terraform init
+  script:
+    - terraform apply -auto-approve tfplan
+  needs: [terraform:plan]
+  when: manual
+  allow_failure: false
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
+# ---> YE RHI NAYI ANSIBLE HARDENING JOB (terraform:apply ke turant baad) <---
+ansible:hardening:
+  stage: deploy
+  image: python:3.12-alpine
+  id_tokens:
+    GITLAB_OIDC_TOKEN:
+      aud: sts.amazonaws.com
+  before_script:
+    - apk add --no-cache openssh-client aws-cli
+    - pip install --no-cache-dir ansible-core==2.17.7
+    # OIDC login yahan bhi zaroorat pad sakti hai agar inventory dynamic AWS EC2 plugin se uthaani ho
+  script:
+    - echo "Executing Ansible Security Hardening on newly provisioned EC2 instances..."
+    - ansible-playbook -i ansible/inventory/hosts.ini ansible/playbooks/secops_hardening.yml
+  needs: [terraform:apply]
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+  
+
+# Rollback is intentionally manual. Set TF_ROLLBACK_COMMAND only after reviewing
+# the deployment-specific rollback plan; this job never blindly destroys infra.
+rollback:manual:
+  stage: recovery
+  image: alpine:3.20
+  script:
+    - test -n "$ROLLBACK_RUNBOOK_URL" || (echo "Set ROLLBACK_RUNBOOK_URL to the approved runbook" && exit 1)
+    - echo "Rollback requires operator approval. Follow $ROLLBACK_RUNBOOK_URL and record evidence."
+  when: manual
+  allow_failure: false
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
