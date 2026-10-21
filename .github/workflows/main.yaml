@@ -103,7 +103,7 @@ jobs:
 
       - name: Lint Ansible playbook
         run: |
-          ansible-lint ansible/playbooks/secops_hardening.yml
+          ansible-lint --roles-path ansible/roles ansible/playbooks/secops_hardening.yml
 
   shell-lint:
     name: Shell Script Lint
@@ -389,6 +389,7 @@ jobs:
           echo "Executing Ansible hardening on provisioned EC2 instances..."
           ansible-playbook \
             -i ansible/inventory/hosts.ini \
+            --roles-path ansible/roles \
             ansible/playbooks/secops_hardening.yml
   # ---------------- RECOVERY: MANUAL REVIEW ----------------
 
