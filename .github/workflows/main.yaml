@@ -391,8 +391,7 @@ ansible-hardening:
             -i ansible/inventory/hosts.ini \
             ansible/playbooks/secops_hardening.yml
   # ---------------- RECOVERY: MANUAL REVIEW ----------------
-
-  rollback-manual:
+rollback-manual:
     name: Manual Rollback Review
     runs-on: ubuntu-latest
     if: >-
