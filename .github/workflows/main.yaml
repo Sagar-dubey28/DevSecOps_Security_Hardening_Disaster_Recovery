@@ -353,13 +353,11 @@ jobs:
       - name: Verify AWS identity
         run: aws sts get-caller-identity
 
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+          # cache: pip  <-- Yeh hata diya hai taaki requirements.txt ki zaroorat na pade
 
       - name: Install Ansible and SSH client
         run: |
@@ -391,7 +389,6 @@ jobs:
           ansible-playbook \
             -i ansible/inventory/hosts.ini \
             ansible/playbooks/secops_hardening.yml
-
   # ---------------- RECOVERY: MANUAL REVIEW ----------------
 
   rollback-manual:
