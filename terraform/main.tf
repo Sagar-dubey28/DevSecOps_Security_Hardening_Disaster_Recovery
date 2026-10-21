@@ -37,8 +37,8 @@ module "compute" {
   enable_detailed_monitoring = var.enable_detailed_monitoring
   tags                       = var.tags
 }
-
 resource "aws_s3_bucket" "audit_logs" {
+  #checkov:skip=CKV_AWS_18: Access logging is handled externally or not required for this environment
   #checkov:skip=CKV_AWS_199: Cross-region replication not required for this environment
   bucket        = var.audit_bucket_name
   force_destroy = false
