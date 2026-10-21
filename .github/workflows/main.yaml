@@ -389,7 +389,6 @@ jobs:
           echo "Executing Ansible hardening on provisioned EC2 instances..."
           ansible-playbook \
             -i ansible/inventory/hosts.ini \
-            --roles-path ansible/roles \
             ansible/playbooks/secops_hardening.yml
   # ---------------- RECOVERY: MANUAL REVIEW ----------------
 
