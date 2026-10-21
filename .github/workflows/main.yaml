@@ -99,12 +99,11 @@ jobs:
           ansible-playbook \
             --syntax-check \
             -i ansible/inventory/hosts.ini \
-            --roles-path ansible/roles \
             ansible/playbooks/secops_hardening.yml
 
       - name: Lint Ansible playbook
         run: |
-          ansible-lint --roles-path ansible/roles ansible/playbooks/secops_hardening.yml
+          ansible-lint ansible/playbooks/secops_hardening.yml
 
   shell-lint:
     name: Shell Script Lint
