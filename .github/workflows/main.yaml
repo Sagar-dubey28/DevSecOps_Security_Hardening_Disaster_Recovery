@@ -99,6 +99,7 @@ jobs:
           ansible-playbook \
             --syntax-check \
             -i ansible/inventory/hosts.ini \
+            --roles-path ansible/roles \
             ansible/playbooks/secops_hardening.yml
 
       - name: Lint Ansible playbook
