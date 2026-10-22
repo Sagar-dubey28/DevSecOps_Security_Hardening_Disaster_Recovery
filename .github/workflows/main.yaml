@@ -14,6 +14,7 @@ on:
         default: validate
         options:
           - validate
+          - deploy
           - rollback-review
 
 permissions:
