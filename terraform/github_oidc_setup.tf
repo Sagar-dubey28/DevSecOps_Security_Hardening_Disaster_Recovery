@@ -52,9 +52,9 @@ resource "aws_iam_role_policy" "github_actions_state" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "StateBucketList"
-        Effect = "Allow"
-        Action = ["s3:ListBucket"]
+        Sid      = "StateBucketList"
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
         Resource = var.state_bucket_arn
       },
       {
@@ -276,9 +276,9 @@ resource "aws_iam_role_policy" "github_actions_infrastructure" {
         Resource = "*"
       },
       {
-        Sid    = "STSGetCallerIdentity"
-        Effect = "Allow"
-        Action = "sts:GetCallerIdentity"
+        Sid      = "STSGetCallerIdentity"
+        Effect   = "Allow"
+        Action   = "sts:GetCallerIdentity"
         Resource = "*"
       }
     ]
