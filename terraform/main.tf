@@ -13,17 +13,18 @@ module "vpc" {
   tags                    = var.tags
 }
 
-module "iam_oidc" {
-  source               = "./modules/iam_oidc"
-  project_name         = var.project_name
-  gitlab_url           = var.gitlab_url
-  gitlab_project_path  = var.gitlab_project_path
-  gitlab_ref           = var.gitlab_ref
-  aws_region           = var.aws_region
-  state_bucket_arn     = var.state_bucket_arn
-  state_lock_table_arn = var.state_lock_table_arn
-  tags                 = var.tags
-}
+# GitHub OIDC is now configured in github_oidc_setup.tf
+# module "iam_oidc" {
+#   source               = "./modules/iam_oidc"
+#   project_name         = var.project_name
+#   gitlab_url           = var.gitlab_url
+#   gitlab_project_path  = var.gitlab_project_path
+#   gitlab_ref           = var.gitlab_ref
+#   aws_region           = var.aws_region
+#   state_bucket_arn     = var.state_bucket_arn
+#   state_lock_table_arn = var.state_lock_table_arn
+#   tags                 = var.tags
+# }
 
 module "compute" {
   source                     = "./modules/compute"
