@@ -31,8 +31,8 @@ These are **initial targets for the sample non-critical application**. The servi
 5. Restore into a new directory/volume or database instance. Verify checksum, schema/data integrity, permissions, and application health.
 6. Validate security posture, secrets, access paths, and monitoring before traffic cutover.
 7. Obtain service-owner approval, perform controlled cutover, monitor, and document actual RTO/RPO.
-8. Preserve evidence and update runbooks and controls from lessons learned
+8. Preserve evidence and update runbooks and controls from lessons learned.
 
-
+## Measuring actual targets
 
 For each test, capture `incident_declared_at`, `service_restored_at`, last recoverable data timestamp, selected backup object version, and validation results. Actual RTO is elapsed restoration time. Actual RPO is outage time minus timestamp of the latest valid recovered data. Do not claim the targets are met until a timed recovery test demonstrates it.
