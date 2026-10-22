@@ -31,7 +31,7 @@ These are **initial targets for the sample non-critical application**. The servi
 5. Restore into a new directory/volume or database instance. Verify checksum, schema/data integrity, permissions, and application health.
 6. Validate security posture, secrets, access paths, and monitoring before traffic cutover.
 7. Obtain service-owner approval, perform controlled cutover, monitor, and document actual RTO/RPO.
-8. Preserve evidence and update runbooks and controls from lessons learned.
+8. Preserve evidence and update runbooks and controls from lessons learned
 
 
 
